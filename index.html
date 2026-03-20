@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NBA Game Tracker</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8f8f6; color: #1a1a1a; min-height: 100vh; }
+
+.header { background: #fff; border-bottom: 0.5px solid #e0e0dc; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+.header-left { display: flex; align-items: center; gap: 10px; }
+.logo { width: 30px; height: 30px; background: #c8102e; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.logo svg { width: 16px; height: 16px; }
+.header h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+.header-right { display: flex; align-items: center; gap: 8px; }
+
+.live-badge { display: none; align-items: center; gap: 4px; background: #fff0f0; border: 0.5px solid #f5c5c5; border-radius: 20px; padding: 2px 8px; font-size: 10px; font-weight: 700; color: #c8102e; letter-spacing: 0.5px; }
+.live-badge.visible { display: flex; }
+.live-dot-anim { width: 6px; height: 6px; border-radius: 50%; background: #c8102e; animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+.countdown-ring { font-size: 11px; color: #ccc; font-variant-numeric: tabular-nums; min-width: 24px; text-align: right; }
+.refresh-btn { font-size: 11px; background: none; border: 0.5px solid #d0d0cc; border-radius: 6px; padding: 4px 9px; cursor: pointer; color: #555; }
+.refresh-btn:hover { background: #f0f0ec; }
+.refresh-btn:disabled { opacity: 0.4; pointer-events: none; }
+
+.stats-row { display: flex; gap: 8px; padding: 10px 14px 4px; }
+.stat-card { flex: 1; background: #fff; border: 0.5px solid #e0e0dc; border-radius: 8px; padding: 7px 8px; text-align: center; }
+.stat-num { font-size: 19px; font-weight: 700; line-height: 1.1; }
+.stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #aaa; margin-top: 1px; }
+.red { color: #c8102e; }
+
+.tabs { display: flex; background: #fff; border-bottom: 0.5px solid #e0e0dc; padding: 0 14px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.tab { font-size: 12px; font-weight: 500; padding: 9px 11px; cursor: pointer; color: #999; border-bottom: 2px solid transparent; white-space: nowrap; flex-shrink: 0; }
+.tab.active { color: #c8102e; border-bottom-color: #c8102e; }
+.tbadge { display: inline-block; font-size: 9px; font-weight: 700; border-radius: 9px; padding: 1px 5px; margin-left: 3px; vertical-align: middle; background: #c8102e; color: white; }
+.tbadge.blue { background: #3a7bd5; }
+
+.games-list { padding: 8px 12px 20px; display: flex; flex-direction: column; gap: 7px; }
+.section-header { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #c8102e; padding: 6px 3px 2px; display: flex; align-items: center; gap: 5px; }
+.section-header.gray { color: #bbb; }
+.section-header.blue { color: #3a7bd5; }
+
+.game-card { background: #fff; border: 0.5px solid #e0e0dc; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.game-card.live { border-left: 3px solid #c8102e; }
+.game-card.upcoming { border-left: 3px solid #3a7bd5; }
+.game-card.score-updated { animation: scoreflash 0.7s ease-out forwards; }
+@keyframes scoreflash { 0%{background:#fffbe6} 100%{background:#fff} }
+
+.card-top { display: flex; align-items: center; justify-content: space-between; }
+.status-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+.spill-dot { width: 5px; height: 5px; border-radius: 50%; }
+.status-pill.live { color: #c8102e; }
+.status-pill.live .spill-dot { background: #c8102e; animation: blink 1.4s infinite; }
+.status-pill.final { color: #aaa; }
+.status-pill.final .spill-dot { background: #ccc; }
+.status-pill.upcoming { color: #3a7bd5; }
+.status-pill.upcoming .spill-dot { background: #3a7bd5; }
+
+.nbtn { font-size: 10px; background: none; border: 0.5px solid #e0e0dc; border-radius: 5px; padding: 3px 8px; cursor: pointer; color: #777; display: inline-flex; align-items: center; gap: 3px; }
+.nbtn:hover { background: #f8f8f4; }
+.nbtn.saved { color: #2d7a4f; border-color: #b5dcc5; background: #f2fbf5; }
+.nbtn.saving { opacity: 0.5; pointer-events: none; }
+.nN { font-weight: 800; font-size: 11px; }
+
+.matchup { display: grid; grid-template-columns: 1fr 80px 1fr; align-items: center; gap: 4px; }
+.team-side { display: flex; align-items: center; gap: 7px; }
+.team-side.home { flex-direction: row-reverse; }
+.tbadge-circle { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 800; color: white; flex-shrink: 0; }
+.tinfo { display: flex; flex-direction: column; }
+.team-side.home .tinfo { align-items: flex-end; }
+.tabbr { font-size: 13px; font-weight: 700; }
+.tabbr.w { color: #1a1a1a; }
+.tabbr.l { color: #d0d0d0; }
+.tname { font-size: 10px; color: #bbb; }
+
+.score-mid { text-align: center; }
+.score-pair { display: flex; align-items: center; justify-content: center; gap: 1px; }
+.snum { font-size: 22px; font-weight: 700; letter-spacing: -1.5px; min-width: 24px; text-align: center; transition: color 0.3s; }
+.snum.w { color: #1a1a1a; }
+.snum.l { color: #d0d0d0; }
+.sdash { font-size: 14px; color: #ddd; margin: 0 3px; }
+.vstext { font-size: 13px; color: #ccc; }
+
+.empty-state { padding: 48px 20px; text-align: center; color: #ccc; font-size: 13px; line-height: 1.6; }
+.last-row { font-size: 10px; color: #ccc; text-align: center; padding: 2px 0 12px; }
+
+.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #111; color: #fff; font-size: 11px; padding: 7px 14px; border-radius: 20px; opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 100; white-space: nowrap; }
+.toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="white"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm6.6 6H15c-.3-1.6-.8-3-1.5-4.2C15.7 4.5 17.5 5.6 18.6 8zM12 4c1 1.2 1.7 2.7 2.1 4h-4.2C10.3 6.7 11 5.2 12 4zM4.2 14C4.1 13.4 4 12.7 4 12s.1-1.4.2-2h3.9c-.1.7-.1 1.3-.1 2s0 1.3.1 2H4.2zm.2 2H8c.3 1.6.8 3 1.5 4.2C7.3 19.5 5.5 17.9 4.4 16zm3.6-8H4.4C5.5 5.6 7.3 4.1 9.5 3.8 8.8 5 8.3 6.4 8 8zm4 12c-1-1.2-1.7-2.7-2.1-4h4.2c-.4 1.3-1.1 2.8-2.1 4zm2.6-6H9.4c-.1-.7-.1-1.3-.1-2s0-1.3.1-2h5.1c.1.7.1 1.3.1 2s0 1.3-.1 2zm.3 6c.7-1.2 1.2-2.6 1.5-4.2h3.8c-1.1 2.4-2.9 3.9-5.3 4.2zM16 8c-.3-1.6-.8-3-1.5-4.2C16.7 4.1 18.5 5.6 19.6 8H16z"/></svg>
+    </div>
+    <h1>NBA Live Tracker</h1>
+  </div>
+  <div class="header-right">
+    <div class="live-badge" id="liveBadge"><div class="live-dot-anim"></div>LIVE</div>
+    <span class="countdown-ring" id="cdRing"></span>
+    <button class="refresh-btn" id="refreshBtn" onclick="fetchScores(true)">↻ Now</button>
+  </div>
+</div>
+
+<div class="stats-row">
+  <div class="stat-card"><div class="stat-num red" id="sLive">–</div><div class="stat-label">Live</div></div>
+  <div class="stat-card"><div class="stat-num" id="sFinal">–</div><div class="stat-label">Final</div></div>
+  <div class="stat-card"><div class="stat-num" id="sUpcoming">–</div><div class="stat-label">Later</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="all" onclick="setTab('all')">All <span class="tbadge" id="bAll">–</span></div>
+  <div class="tab" data-tab="live" onclick="setTab('live')">Live</div>
+  <div class="tab" data-tab="final" onclick="setTab('final')">Final</div>
+  <div class="tab" data-tab="upcoming" onclick="setTab('upcoming')">Upcoming</div>
+  <div class="tab" data-tab="saved" onclick="setTab('saved')">Saved <span class="tbadge blue" id="bSaved">0</span></div>
+</div>
+
+<div id="gamesContainer"><div class="empty-state">Fetching live scores…</div></div>
+<div class="last-row" id="lastRow"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TC = {LAL:'#552583',BOS:'#007a33',GSW:'#b8860b',MIA:'#98002e',CHI:'#ce1141',NYK:'#006bb6',OKC:'#007ac1',CLE:'#860038',DEN:'#0e2240',PHX:'#e56020',HOU:'#ce1141',MEM:'#5d76a9',ATL:'#e03a3e',POR:'#e03a3e',MIN:'#0c2340',NOP:'#0c2340',SAS:'#8a8a8a',DAL:'#00538c',DET:'#c8102e',WAS:'#002b5c',BKN:'#222',IND:'#002d62',SAC:'#5a2d82',PHI:'#006bb6',UTA:'#002b5c',ORL:'#0077c0',CHA:'#1d1160',MIL:'#00471b',TOR:'#ce1141',LAC:'#c8102e'};
+
+let games = [];
+let tab = 'all';
+let saved = JSON.parse(localStorage.getItem('nba_sv3') || '[]');
+let busy = false;
+let cdSecs = 30;
+let cdTimer = null;
+let autoTimer = null;
+
+function tc(a) { return TC[a] || '#444'; }
+
+async function fetchScores(manual) {
+  if (busy) return;
+  busy = true;
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  try {
+    const today = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:1200,
+        system:`Search for today's NBA scores and return ONLY a raw JSON array. No markdown, no backticks, no explanation whatsoever — just the array starting with [ and ending with ].
+
+Each element must have these exact fields:
+- id: short unique string (e.g. "lal-bos-1")
+- status: "live", "final", or "upcoming"
+- away: team abbreviation (e.g. "LAL")
+- home: team abbreviation
+- awayFull: full away team name
+- homeFull: full home team name
+- awayScore: integer (only if live or final)
+- homeScore: integer (only if live or final)
+- quarter: integer 1-4 (only if live)
+- clock: string like "4:22" (only if live)
+- time: game time string (e.g. "7:30 PM ET")
+
+Include all games today. Return ONLY the JSON array, nothing else.`,
+        messages:[{role:"user",content:`Get all NBA scores for ${today}. Return the raw JSON array only.`}],
+        tools:[{type:"web_search_20250305",name:"web_search"}]
+      })
+    });
+
+    const data = await resp.json();
+    const txt = data.content?.find(c => c.type==='text')?.text || '';
+    const s = txt.indexOf('['), e = txt.lastIndexOf(']');
+    if (s !== -1 && e !== -1) {
+      const newGames = JSON.parse(txt.slice(s, e+1));
+      const prev = {};
+      games.forEach(g => { prev[g.id] = {a:g.awayScore,h:g.homeScore}; });
+      games = newGames;
+      render(prev);
+      const t = new Date();
+      document.getElementById('lastRow').textContent = `Updated ${t.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',second:'2-digit'})}`;
+    }
+  } catch(err) {
+    if (!games.length) document.getElementById('gamesContainer').innerHTML = `<div class="empty-state">Could not load scores.<br><small>Check your connection and refresh.</small></div>`;
+  }
+
+  busy = false;
+  btn.disabled = false;
+  btn.textContent = '↻ Now';
+  startCountdown();
+}
+
+function startCountdown() {
+  clearInterval(cdTimer);
+  cdSecs = 30;
+  const el = document.getElementById('cdRing');
+  el.textContent = '30s';
+  cdTimer = setInterval(() => {
+    cdSecs--;
+    if (cdSecs > 0) { el.textContent = cdSecs + 's'; }
+    else { el.textContent = '…'; clearInterval(cdTimer); }
+  }, 1000);
+}
+
+function setTab(t) {
+  tab = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  render({});
+}
+
+function filtered() {
+  if (tab === 'all') return games;
+  if (tab === 'saved') return games.filter(g => saved.includes(g.id));
+  return games.filter(g => g.status === tab);
+}
+
+function render(prev) {
+  const live = games.filter(g => g.status==='live');
+  const fin  = games.filter(g => g.status==='final');
+  const up   = games.filter(g => g.status==='upcoming');
+
+  document.getElementById('sLive').textContent    = live.length;
+  document.getElementById('sFinal').textContent   = fin.length;
+  document.getElementById('sUpcoming').textContent = up.length;
+  document.getElementById('bAll').textContent     = games.length;
+  document.getElementById('bSaved').textContent   = saved.length;
+  document.getElementById('liveBadge').className  = live.length ? 'live-badge visible' : 'live-badge';
+
+  const list = filtered();
+  const c = document.getElementById('gamesContainer');
+  if (!list.length) { c.innerHTML = `<div class="empty-state">${tab==='saved'?'No saved games yet.':'No games to show.'}</div>`; return; }
+
+  let h = '<div class="games-list">';
+  if (tab === 'all') {
+    if (live.length) { h += `<div class="section-header">Live now</div>`; live.forEach(g => h += card(g,prev)); }
+    if (fin.length)  { h += `<div class="section-header gray">Final</div>`; fin.forEach(g => h += card(g,prev)); }
+    if (up.length)   { h += `<div class="section-header blue">Upcoming</div>`; up.forEach(g => h += card(g,prev)); }
+  } else {
+    list.forEach(g => h += card(g,prev));
+  }
+  h += '</div>';
+  c.innerHTML = h;
+}
+
+function card(g, prev) {
+  const has = g.awayScore !== undefined && g.homeScore !== undefined;
+  const aw = has && g.awayScore > g.homeScore;
+  const hw = has && g.homeScore > g.awayScore;
+  const p = prev[g.id];
+  const changed = p && has && (p.a !== g.awayScore || p.h !== g.homeScore);
+  const isSaved = saved.includes(g.id);
+
+  const acity = (g.awayFull||'').replace(/\s+\S+$/,'');
+  const hcity = (g.homeFull||'').replace(/\s+\S+$/,'');
+
+  let spill = '';
+  if (g.status==='live')     spill = `<div class="status-pill live"><div class="spill-dot"></div>Q${g.quarter||'?'}${g.clock?' '+g.clock:''}</div>`;
+  else if (g.status==='final') spill = `<div class="status-pill final"><div class="spill-dot"></div>Final</div>`;
+  else                          spill = `<div class="status-pill upcoming"><div class="spill-dot"></div>${g.time||'TBD'}</div>`;
+
+  let scoreHtml = has
+    ? `<div class="score-pair"><span class="snum ${aw?'w':hw?'l':''}">${g.awayScore}</span><span class="sdash">–</span><span class="snum ${hw?'w':aw?'l':''}">${g.homeScore}</span></div>`
+    : `<div class="vstext">vs</div>`;
+
+  return `<div class="game-card ${g.status}${changed?' score-updated':''}" id="gc-${g.id}">
+  <div class="card-top">
+    ${spill}
+    <button class="nbtn${isSaved?' saved':''}" id="nb-${g.id}" onclick="saveNotion('${g.id}')">
+      <span class="nN">N</span>${isSaved?' Saved':' Save'}
+    </button>
+  </div>
+  <div class="matchup">
+    <div class="team-side away">
+      <div class="tbadge-circle" style="background:${tc(g.away)}">${g.away}</div>
+      <div class="tinfo"><span class="tabbr ${aw?'w':hw?'l':''}">${g.away}</span><span class="tname">${acity}</span></div>
+    </div>
+    <div class="score-mid">${scoreHtml}</div>
+    <div class="team-side home">
+      <div class="tbadge-circle" style="background:${tc(g.home)}">${g.home}</div>
+      <div class="tinfo"><span class="tabbr ${hw?'w':aw?'l':''}">${g.home}</span><span class="tname">${hcity}</span></div>
+    </div>
+  </div>
+</div>`;
+}
+
+async function saveNotion(id) {
+  const btn = document.getElementById('nb-'+id);
+  const g = games.find(x => x.id===id);
+  if (!g) return;
+  btn.className = 'nbtn saving';
+  btn.innerHTML = '<span class="nN">N</span> …';
+
+  const desc = g.awayScore !== undefined
+    ? `${g.away} ${g.awayScore}–${g.homeScore} ${g.home} | ${g.status==='live'?`Q${g.quarter} ${g.clock||''}`:'Final'}`
+    : `${g.awayFull} vs ${g.homeFull} | ${g.time||'TBD'}`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        model:"claude-sonnet-4-20250514",max_tokens:800,
+        system:"Use Notion MCP to save this NBA game. Return only JSON {\"success\":true} or {\"success\":false,\"error\":\"...\"}",
+        messages:[{role:"user",content:`Save to Notion:\n${desc}\nHome: ${g.homeFull}\nAway: ${g.awayFull}\nStatus: ${g.status}`}],
+        mcp_servers:[{type:"url",url:"https://mcp.notion.com/mcp",name:"notion-mcp"}]
+      })
+    });
+    const d = await res.json();
+    const txt = d.content?.find(c=>c.type==='text')?.text||'';
+    let ok = false;
+    try { const p = JSON.parse(txt.replace(/```json|```/g,'').trim()); ok = p.success; } catch { ok = true; }
+    if (ok) {
+      saved.push(id);
+      localStorage.setItem('nba_sv3', JSON.stringify(saved));
+      btn.className = 'nbtn saved'; btn.innerHTML = '<span class="nN">N</span> Saved';
+      document.getElementById('bSaved').textContent = saved.length;
+      toast('Saved to Notion');
+    } else {
+      btn.className = 'nbtn'; btn.innerHTML = '<span class="nN">N</span> Save';
+      toast('Notion save failed');
+    }
+  } catch {
+    btn.className = 'nbtn'; btn.innerHTML = '<span class="nN">N</span> Save';
+    toast('Connection error');
+  }
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast on';
+  setTimeout(() => el.className = 'toast', 2400);
+}
+
+fetchScores(true);
+autoTimer = setInterval(() => fetchScores(false), 30000);
+</script>
+</body>
+</html>
